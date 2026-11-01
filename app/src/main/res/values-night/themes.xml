@@ -1,0 +1,5 @@
+<resources>
+    <style name="Theme.PocketHamster" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#1C140F</item>
+    </style>
+</resources>
