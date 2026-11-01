@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.aliuppal.pockethamster"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.aliuppal.pockethamster"
@@ -42,6 +42,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("androidx.health.connect:connect-client:1.1.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.14.1")

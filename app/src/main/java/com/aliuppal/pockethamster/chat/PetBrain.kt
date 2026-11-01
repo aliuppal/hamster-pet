@@ -1,9 +1,11 @@
 package com.aliuppal.pockethamster.chat
 
 import com.aliuppal.pockethamster.AppSettings
+import com.aliuppal.pockethamster.budget.Budget
 import com.aliuppal.pockethamster.pet.Mood
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.pet.PetState
+import com.aliuppal.pockethamster.wellness.Wellness
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -13,9 +15,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.roundToInt
 
-enum class PetAction { FEED, PLAY, SLEEP, WAKE, PET }
+enum class PetAction { FEED, PLAY, SLEEP, WAKE, PET, WATER }
 
-enum class Outcome { FED, TOO_FULL, PLAYED, TOO_TIRED, SLEPT, WOKE, PETTED }
+enum class Outcome { FED, TOO_FULL, PLAYED, TOO_TIRED, SLEPT, WOKE, PETTED, HYDRATED }
 
 class BrainReply(val text: String, val usedAi: Boolean, val aiError: String?)
 
@@ -27,6 +29,7 @@ object PetBrain {
         PetAction.SLEEP -> { PetRepository.sleep(); Outcome.SLEPT }
         PetAction.WAKE -> { PetRepository.wake(); Outcome.WOKE }
         PetAction.PET -> { PetRepository.pet(); Outcome.PETTED }
+        PetAction.WATER -> { Wellness.logWater(); Outcome.HYDRATED }
     }
 
     /** Talking to the hamster can also do things: "want a seed?" feeds it, "let's play" plays. */
@@ -34,6 +37,7 @@ object PetBrain {
         val s = input.lowercase()
         fun has(vararg words: String) = words.any { Regex("\\b$it").containsMatchIn(s) }
         return when {
+            Regex("(drank|drink|had|sip|glass of) (some |a )?(water|glass)|hydrated").containsMatchIn(s) -> PetAction.WATER
             has("wake", "good morning", "get up", "rise and shine") -> PetAction.WAKE
             has("seed", "snack", "food", "eat", "feed", "carrot", "treat", "cookie", "nut", "apple",
                 "dinner", "lunch", "breakfast", "broccoli") -> PetAction.FEED
@@ -45,6 +49,26 @@ object PetBrain {
     }
 
     suspend fun respond(input: String, history: List<ChatMessage>): BrainReply {
+        // Budget keeping is answered directly so amounts are never made up by an AI model.
+        Budget.fromChat(input)?.let { e ->
+            Budget.add(e)
+            PetRepository.chatted()
+            val s = Budget.summary()
+            return BrainReply(
+                "*scribbles in a tiny notebook* Noted ${Budget.format(e.amountCents)} for ${e.category.emoji} ${e.note}. " +
+                    "That's ${Budget.format(s.week)} this week and ${Budget.format(s.month)} this month.",
+                usedAi = false, aiError = null,
+            )
+        }
+        if (Budget.isSpendingQuestion(input)) {
+            val s = Budget.summary()
+            val top = s.byCategoryMonth.entries.firstOrNull()
+            val topLine = top?.let { " Most of it went on ${it.key.emoji} ${it.key.label} (${Budget.format(it.value)})." } ?: ""
+            return BrainReply(
+                "*flips through notebook* This week: ${Budget.format(s.week)}. This month: ${Budget.format(s.month)}.$topLine",
+                usedAi = false, aiError = null,
+            )
+        }
         val outcome = detectAction(input)?.let { perform(it) }
         PetRepository.chatted()
         val state = PetRepository.state.value
@@ -175,6 +199,7 @@ object PetBrain {
             Outcome.SLEPT -> "You are now curling up to go to sleep."
             Outcome.WOKE -> "The user just woke you up."
             Outcome.PETTED -> "The user just petted and cuddled you."
+            Outcome.HYDRATED -> "The user just drank a glass of water; cheer them on, you sip from your water bottle too."
             null -> ""
         }
         return """
@@ -197,6 +222,7 @@ object PetLines {
         Outcome.SLEPT -> pick("*curls into a fuzzy ball* Night night... zzz", "*burrows into the bedding* Sweet dreams...")
         Outcome.WOKE -> pick("*stretches tiny paws* I'm awake! Hamsters love nighttime though, hehe.", "*yawn* Good morning! Is it seed o'clock?")
         Outcome.PETTED -> pick("*leans into your finger* Hehe, that tickles!", "*happy squeak* More pets please!")
+        Outcome.HYDRATED -> pick("*sips from tiny bottle* Hydrated! 💧 We're a great team!", "Glug glug! 💧 +20 acorns for us!")
     }
 
     fun tap(mood: Mood): String = when (mood) {

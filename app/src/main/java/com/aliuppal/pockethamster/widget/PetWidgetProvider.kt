@@ -12,6 +12,7 @@ import android.widget.RemoteViews
 import com.aliuppal.pockethamster.R
 import com.aliuppal.pockethamster.chat.PetAction
 import com.aliuppal.pockethamster.chat.PetBrain
+import com.aliuppal.pockethamster.companion.CompanionEngine
 import com.aliuppal.pockethamster.pet.PetRenderer
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.pet.PetState
@@ -50,7 +51,11 @@ class PetWidgetProvider : AppWidgetProvider() {
         private fun petBitmap(s: PetState): Bitmap {
             val size = 280
             val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-            PetRenderer.draw(Canvas(bmp), size / 2f, size * 0.5f, size * 0.8f, s.mood, t = 1f, eating = s.isEating())
+            // Smaller and lower than the app's framing so an umbrella or sign still fits on top.
+            PetRenderer.draw(
+                Canvas(bmp), size / 2f, size * 0.58f, size * 0.7f, s.mood, t = 1f,
+                eating = s.isEating(), look = CompanionEngine.currentLook(),
+            )
             return bmp
         }
 

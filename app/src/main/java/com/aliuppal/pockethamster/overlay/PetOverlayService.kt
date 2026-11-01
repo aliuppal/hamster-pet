@@ -26,26 +26,32 @@ import com.aliuppal.pockethamster.AppSettings
 import com.aliuppal.pockethamster.PetApp
 import com.aliuppal.pockethamster.R
 import com.aliuppal.pockethamster.chat.PetLines
+import com.aliuppal.pockethamster.companion.CompanionEngine
 import com.aliuppal.pockethamster.pet.Mood
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.ui.MainActivity
+import com.aliuppal.pockethamster.wellness.Wellness
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.random.Random
 
 /**
- * Keeps a small always-on-top window with the hamster in it. The hamster walks along the bottom of
- * the screen, can be dragged around (and falls back down when let go), hops when tapped and opens
- * the chat on double-tap.
+ * Keeps a small always-on-top window with the hamster in it. The hamster roams anywhere on the
+ * screen, stays wherever you drop it, hops when tapped (or logs a glass of water when it's
+ * thirsty) and opens the chat on double-tap. It dresses and talks according to [CompanionEngine].
  */
 class PetOverlayService : LifecycleService() {
 
     companion object {
         private const val ACTION_HIDE = "com.aliuppal.pockethamster.HIDE_OVERLAY"
         private const val NOTIFICATION_ID = 1
+
+        /** Whether the floating hamster is on screen; the background worker defers to it. */
+        @Volatile
+        var running = false
+            private set
 
         fun start(context: Context) =
             ContextCompat.startForegroundService(context, Intent(context, PetOverlayService::class.java))
@@ -55,7 +61,7 @@ class PetOverlayService : LifecycleService() {
         }
     }
 
-    private enum class Mode { IDLE, WALK, DRAG, FALL }
+    private enum class Mode { IDLE, WALK, DRAG }
 
     private lateinit var wm: WindowManager
     private lateinit var view: FloatingPetView
@@ -65,15 +71,21 @@ class PetOverlayService : LifecycleService() {
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Float) = v * density
 
-    private var mode = Mode.FALL
+    private var mode = Mode.IDLE
+    // Where the hamster stands; hops are drawn as an offset above it.
     private var px = 0f
     private var py = 0f
-    private var vy = 0f
+    private var hopOffset = 0f
+    private var hopVelocity = 0f
     private var targetX = 0f
+    private var targetY = 0f
+    private var minY = 0f
     private var maxX = 0f
-    private var floorY = 0f
+    private var maxY = 0f
     private var idleUntil = 0L
+    private var celebrateUntil = 0L
     private var nextChatter = 0L
+    private var nextSpeech = 0L
     private var lastFrameNanos = 0L
     private var t = 0f
 
@@ -90,14 +102,14 @@ class PetOverlayService : LifecycleService() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
         view = FloatingPetView(this)
         params = WindowManager.LayoutParams(
-            dp(140f).toInt(), dp(150f).toInt(),
+            dp(140f).toInt(), dp(170f).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.START }
         measureScreen()
         px = maxX * 0.75f
-        py = floorY * 0.4f
+        py = maxY
         applyPosition()
         try {
             wm.addView(view, params)
@@ -108,11 +120,28 @@ class PetOverlayService : LifecycleService() {
             stopSelf()
             return
         }
+        running = true
         setupTouch()
         view.post { view.say(PetLines.tap(PetRepository.state.value.mood)) }
+        nextSpeech = System.currentTimeMillis() + 3_500
 
+        lifecycleScope.launch { PetRepository.state.collect { s -> view.mood = s.mood } }
+        lifecycleScope.launch { CompanionEngine.lookFlow().collect { view.look = it } }
         lifecycleScope.launch {
-            PetRepository.state.collect { s -> view.mood = s.mood }
+            var first = true
+            CompanionEngine.celebrations.collect {
+                if (!first) {
+                    celebrateUntil = System.currentTimeMillis() + 2_500
+                    hop(620f)
+                }
+                first = false
+            }
+        }
+        lifecycleScope.launch {
+            while (isActive) {
+                runCatching { CompanionEngine.tick(this@PetOverlayService, overlayActive = true) }
+                delay(3_000)
+            }
         }
         lifecycleScope.launch {
             while (isActive) {
@@ -120,7 +149,7 @@ class PetOverlayService : LifecycleService() {
                 PetRepository.refresh()
             }
         }
-        nextChatter = System.currentTimeMillis() + 15_000
+        nextChatter = System.currentTimeMillis() + 20_000
         Choreographer.getInstance().postFrameCallback(frameCallback)
     }
 
@@ -138,16 +167,22 @@ class PetOverlayService : LifecycleService() {
         super.onConfigurationChanged(newConfig)
         measureScreen()
         px = px.coerceIn(0f, maxX)
-        mode = Mode.FALL
+        py = py.coerceIn(minY, maxY)
+        mode = Mode.IDLE
     }
 
     override fun onDestroy() {
+        running = false
         Choreographer.getInstance().removeFrameCallback(frameCallback)
         if (attached) {
             runCatching { wm.removeView(view) }
             attached = false
         }
         super.onDestroy()
+    }
+
+    private fun hop(strength: Float) {
+        if (hopOffset == 0f) hopVelocity = -dp(strength)
     }
 
     private fun step(frameTimeNanos: Long) {
@@ -159,35 +194,48 @@ class PetOverlayService : LifecycleService() {
         val lazy = state.mood == Mood.SLEEPING || state.mood == Mood.TIRED
 
         when (mode) {
-            Mode.IDLE -> if (now > idleUntil && !lazy) {
-                targetX = Random.nextFloat() * maxX
+            Mode.IDLE -> if (now > idleUntil && !lazy && now > celebrateUntil) {
+                // Wander anywhere on screen, but mostly short trips so it doesn't zoom around.
+                targetX = (px + Random.nextFloat() * dp(360f) - dp(180f)).coerceIn(0f, maxX)
+                targetY = (py + Random.nextFloat() * dp(300f) - dp(150f)).coerceIn(minY, maxY)
                 mode = Mode.WALK
             }
             Mode.WALK -> {
                 val speed = dp(if (state.mood == Mood.HAPPY) 48f else 34f)
-                val dir = if (targetX > px) 1f else -1f
-                view.facingLeft = dir < 0
-                px += dir * speed * dt
-                if (abs(targetX - px) <= speed * dt || lazy) {
+                val dx = targetX - px
+                val dy = targetY - py
+                val dist = hypot(dx, dy)
+                if (dist <= speed * dt || lazy) {
                     mode = Mode.IDLE
                     idleUntil = now + Random.nextLong(3_000, 9_000)
-                }
-            }
-            Mode.FALL -> {
-                vy += dp(2600f) * dt
-                py += vy * dt
-                if (py >= floorY) {
-                    py = floorY
-                    vy = 0f
-                    mode = Mode.IDLE
-                    idleUntil = now + 1_500
+                } else {
+                    px += dx / dist * speed * dt
+                    py += dy / dist * speed * dt
+                    if (kotlin.math.abs(dx) > 1f) view.facingLeft = dx < 0
                 }
             }
             Mode.DRAG -> Unit
         }
 
+        // Hops are a vertical bounce above the spot the hamster is standing on.
+        if (hopOffset < 0f || hopVelocity != 0f) {
+            hopVelocity += dp(2600f) * dt
+            hopOffset += hopVelocity * dt
+            if (hopOffset >= 0f) {
+                hopOffset = 0f
+                hopVelocity = 0f
+                if (now < celebrateUntil) hop(560f)
+            }
+        }
+
+        if (now > nextSpeech) {
+            CompanionEngine.nextLine()?.let {
+                view.say(it, 4_000)
+                nextSpeech = now + 4_500
+            }
+        }
         if (now > nextChatter) {
-            PetLines.chatter(state.mood, state.name)?.let { view.say(it) }
+            PetLines.chatter(state.mood, state.name)?.let { if (now > nextSpeech) view.say(it) }
             nextChatter = now + Random.nextLong(25_000, 50_000)
         }
 
@@ -200,7 +248,7 @@ class PetOverlayService : LifecycleService() {
 
     private fun applyPosition() {
         val x = px.toInt()
-        val y = py.toInt()
+        val y = (py + hopOffset).coerceAtLeast(0f).toInt()
         if (params.x != x || params.y != y) {
             params.x = x
             params.y = y
@@ -214,10 +262,14 @@ class PetOverlayService : LifecycleService() {
             override fun onDown(e: MotionEvent) = true
 
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                PetRepository.pet()
-                view.say(PetLines.tap(PetRepository.state.value.mood), 2_500)
-                mode = Mode.FALL
-                vy = -dp(520f) // little hop
+                if (Wellness.isThirsty()) {
+                    // Closes the hydration loop: hop dance, +20 acorns, bottle kept as a reward.
+                    Wellness.logWater()
+                } else {
+                    PetRepository.pet()
+                    view.say(PetLines.tap(PetRepository.state.value.mood), 2_500)
+                    hop(520f)
+                }
                 return true
             }
 
@@ -252,17 +304,20 @@ class PetOverlayService : LifecycleService() {
                     if (!dragging && hypot(dx, dy) > slop) {
                         dragging = true
                         mode = Mode.DRAG
+                        hopOffset = 0f
+                        hopVelocity = 0f
                         view.say("Wheee!", 1_500)
                     }
                     if (dragging) {
                         px = (startX + dx).coerceIn(0f, maxX)
-                        py = (startY + dy).coerceIn(0f, floorY)
+                        py = (startY + dy).coerceIn(minY, maxY)
                     }
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (dragging) {
+                    // Stays where it was dropped, then carries on exploring from there.
                     dragging = false
-                    mode = Mode.FALL
-                    vy = 0f
+                    mode = Mode.IDLE
+                    idleUntil = System.currentTimeMillis() + 4_000
                 }
             }
             true
@@ -272,12 +327,14 @@ class PetOverlayService : LifecycleService() {
     private fun measureScreen() {
         val width: Int
         val height: Int
+        val topInset: Int
         val bottomInset: Int
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val metrics = wm.currentWindowMetrics
             val insets = metrics.windowInsets.getInsetsIgnoringVisibility(WindowInsets.Type.systemBars())
             width = metrics.bounds.width()
             height = metrics.bounds.height()
+            topInset = insets.top
             bottomInset = insets.bottom
         } else {
             val dm = DisplayMetrics()
@@ -286,11 +343,15 @@ class PetOverlayService : LifecycleService() {
             width = dm.widthPixels
             height = dm.heightPixels
             @SuppressLint("DiscouragedApi", "InternalInsetResource")
-            val id = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-            bottomInset = if (id > 0) resources.getDimensionPixelSize(id) else 0
+            val nav = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+            @SuppressLint("DiscouragedApi", "InternalInsetResource")
+            val status = resources.getIdentifier("status_bar_height", "dimen", "android")
+            bottomInset = if (nav > 0) resources.getDimensionPixelSize(nav) else 0
+            topInset = if (status > 0) resources.getDimensionPixelSize(status) else 0
         }
         maxX = (width - params.width).toFloat().coerceAtLeast(0f)
-        floorY = (height - bottomInset - params.height).toFloat().coerceAtLeast(0f)
+        minY = topInset.toFloat()
+        maxY = (height - bottomInset - params.height).toFloat().coerceAtLeast(minY)
     }
 
     private fun startInForeground() {

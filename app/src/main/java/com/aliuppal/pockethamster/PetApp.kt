@@ -8,16 +8,34 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.provider.Settings
+import com.aliuppal.pockethamster.budget.Budget
 import com.aliuppal.pockethamster.chat.ChatStore
+import com.aliuppal.pockethamster.companion.CompanionEngine
+import com.aliuppal.pockethamster.companion.CompanionWorker
+import com.aliuppal.pockethamster.cosmetics.Wardrobe
 import com.aliuppal.pockethamster.overlay.PetOverlayService
 import com.aliuppal.pockethamster.pet.PetRepository
+import com.aliuppal.pockethamster.reminders.Notifier
+import com.aliuppal.pockethamster.reminders.ReminderGate
+import com.aliuppal.pockethamster.reminders.ReminderSettings
+import com.aliuppal.pockethamster.sense.Weather
+import com.aliuppal.pockethamster.wellness.Wellness
 
 class PetApp : Application() {
     override fun onCreate() {
         super.onCreate()
         AppSettings.init(this)
+        ReminderSettings.init(this)
+        ReminderGate.init(this)
+        Weather.init(this)
+        CompanionEngine.init(this)
+        Wardrobe.init(this)
+        Wellness.init(this) // before PetRepository: decay reads the screen-time multiplier
         PetRepository.init(this)
         ChatStore.init(this)
+        Budget.init(this)
+        Notifier.createChannel(this)
+        CompanionWorker.schedule(this)
         val channel = NotificationChannel(CHANNEL_ID, "Floating hamster", NotificationManager.IMPORTANCE_LOW).apply {
             description = "Keeps your hamster walking on the home screen"
             setShowBadge(false)

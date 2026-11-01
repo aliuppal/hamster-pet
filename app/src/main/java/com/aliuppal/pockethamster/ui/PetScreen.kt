@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,12 +58,19 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliuppal.pockethamster.chat.PetAction
 import com.aliuppal.pockethamster.chat.PetBrain
 import com.aliuppal.pockethamster.chat.PetLines
+import com.aliuppal.pockethamster.companion.CompanionEngine
+import com.aliuppal.pockethamster.cosmetics.Look
+import com.aliuppal.pockethamster.cosmetics.Wardrobe
 import com.aliuppal.pockethamster.pet.PetRenderer
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.pet.PetState
+import com.aliuppal.pockethamster.reminders.ReminderSettings
+import com.aliuppal.pockethamster.wellness.Wellness
+import com.aliuppal.pockethamster.wellness.WellnessState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -69,7 +78,7 @@ import kotlin.math.roundToInt
 
 /** The animated hamster, drawn with the same renderer as the overlay and widget. */
 @Composable
-fun PetCanvas(state: PetState, modifier: Modifier = Modifier, hop: () -> Float = { 0f }) {
+fun PetCanvas(state: PetState, modifier: Modifier = Modifier, look: Look = Look(), hop: () -> Float = { 0f }) {
     var t by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = withFrameNanos { it }
@@ -78,9 +87,10 @@ fun PetCanvas(state: PetState, modifier: Modifier = Modifier, hop: () -> Float =
     Canvas(modifier.semantics { contentDescription = "${state.name} the hamster, ${state.mood.label}" }) {
         val l = min(size.width, size.height)
         drawIntoCanvas {
+            // Framed a little low and small so a held umbrella or sign still fits.
             PetRenderer.draw(
-                it.nativeCanvas, size.width / 2f, size.height / 2f - hop() * 0.15f * l, l * 0.8f,
-                state.mood, t, eating = state.isEating(),
+                it.nativeCanvas, size.width / 2f, size.height * 0.56f - hop() * 0.15f * l, l * 0.72f,
+                state.mood, t, eating = state.isEating(), look = look,
             )
         }
     }
@@ -94,6 +104,10 @@ fun PetScreen(
     onAddWidget: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
+    val look by remember { CompanionEngine.lookFlow() }.collectAsStateWithLifecycle(CompanionEngine.currentLook())
+    val wellness by Wellness.state.collectAsStateWithLifecycle()
+    val wardrobe by Wardrobe.state.collectAsStateWithLifecycle()
+    val celebration by CompanionEngine.celebrations.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val hop = remember { Animatable(0f) }
     var bubble by remember { mutableStateOf<String?>(null) }
@@ -106,6 +120,13 @@ fun PetScreen(
     fun bounce() = scope.launch {
         hop.animateTo(1f, tween(130))
         hop.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMediumLow))
+    }
+    LaunchedEffect(celebration) {
+        if (celebration == 0L) return@LaunchedEffect
+        repeat(3) {
+            hop.animateTo(1f, tween(140))
+            hop.animateTo(0f, tween(160))
+        }
     }
     fun act(action: PetAction) {
         bubble = PetLines.forOutcome(PetBrain.perform(action))
@@ -123,7 +144,7 @@ fun PetScreen(
             Column(Modifier.weight(1f)) {
                 Text(state.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "Feeling ${state.mood.label.lowercase()}",
+                    "Feeling ${state.mood.label.lowercase()} · 🌰 ${wardrobe.acorns}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -135,13 +156,18 @@ fun PetScreen(
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(290.dp)
+                .height(300.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .background(Brush.verticalGradient(listOf(Color(0xFFFFE9D2), Color(0xFFFFD9B5))))
                 .clickable(remember { MutableInteractionSource() }, indication = null) {
-                    PetRepository.pet()
-                    bubble = PetLines.tap(state.mood)
-                    bounce()
+                    if (Wellness.isThirsty()) {
+                        Wellness.logWater()
+                        bubble = "Hydrated! 💧 +${Wellness.WATER_ACORNS} 🌰"
+                    } else {
+                        PetRepository.pet()
+                        bubble = PetLines.tap(state.mood)
+                        bounce()
+                    }
                 },
         ) {
             Box(
@@ -155,11 +181,12 @@ fun PetScreen(
                 state,
                 Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 6.dp)
-                    .size(220.dp),
+                    .padding(bottom = 4.dp)
+                    .size(250.dp),
+                look = look,
                 hop = { hop.value },
             )
-            bubble?.let {
+            (bubble ?: if (Wellness.isThirsty()) "Time to hydrate! Tap me when you've had a sip. 💧" else null)?.let {
                 Surface(
                     Modifier
                         .align(Alignment.TopCenter)
@@ -195,6 +222,8 @@ fun PetScreen(
             ) { Text(if (state.sleeping) "☀️ Wake" else "🌙 Sleep") }
         }
 
+        TodayCard(wellness, wardrobe.goldenSeeds, onOpenSettings)
+
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("On your home screen", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -202,7 +231,7 @@ fun PetScreen(
                     Column(Modifier.weight(1f)) {
                         Text("Floating hamster", style = MaterialTheme.typography.bodyLarge)
                         Text(
-                            "${state.name} walks along the bottom of your screen. Tap to pet, double-tap to chat, drag to move.",
+                            "${state.name} roams your screen. Tap to pet, double-tap to chat, drag to move: it stays where you drop it.",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
@@ -221,6 +250,86 @@ fun PetScreen(
             }
         }
     }
+}
+
+@Composable
+private fun TodayCard(w: WellnessState, goldenSeeds: Int, onOpenSettings: () -> Unit) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Today", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+
+            TodayRow("💧", "Water", "${w.glassesToday} glass${if (w.glassesToday == 1) "" else "es"} · +${Wellness.WATER_ACORNS} 🌰 each") {
+                FilledTonalButton(onClick = { Wellness.logWater() }) { Text("I drank water") }
+            }
+
+            if (w.stepsToday >= 0) {
+                TodayRow(
+                    "👟", "Steps",
+                    "%,d / %,d".format(w.stepsToday, Wellness.GOLDEN_SEED_STEPS) + if (w.goldenSeedToday) " · golden seed found ✨" else "",
+                ) {}
+                LinearProgressIndicator(
+                    progress = { (w.stepsToday.toFloat() / Wellness.GOLDEN_SEED_STEPS).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    strokeCap = StrokeCap.Round,
+                    gapSize = 0.dp,
+                    drawStopIndicator = {},
+                )
+            } else {
+                TodayRow("👟", "Steps", "Connect Health Connect for golden seeds") {
+                    OutlinedButton(onClick = onOpenSettings) { Text("Connect") }
+                }
+            }
+
+            if (w.screenTimeMs >= 0) {
+                val limit = ReminderSettings.screenLimitMin * 60_000L
+                val under = w.screenTimeMs <= limit
+                TodayRow(
+                    "📱", "Screen time",
+                    "${hm(w.screenTimeMs)} of ${hm(limit)} goal" + if (under) " · slower decay 🐢" else "",
+                ) {}
+            } else {
+                TodayRow("📱", "Screen time", "Allow usage access for break nudges") {
+                    OutlinedButton(onClick = onOpenSettings) { Text("Allow") }
+                }
+            }
+
+            if (w.focusing(now)) {
+                val left = ((w.focusUntil - now) / 60_000L).coerceAtLeast(1)
+                TodayRow("🎯", "Focus", "$left min left · glasses on 👓") {
+                    OutlinedButton(onClick = { Wellness.stopFocus() }) { Text("Stop") }
+                }
+            } else {
+                TodayRow("🎯", "Focus", "25 minutes, +${Wellness.FOCUS_ACORNS} 🌰 when done") {
+                    FilledTonalButton(onClick = { Wellness.startFocus() }) { Text("Start") }
+                }
+            }
+            if (goldenSeeds > 0) Text("✨ $goldenSeeds golden seed${if (goldenSeeds == 1) "" else "s"} collected", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun TodayRow(emoji: String, title: String, subtitle: String, action: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(emoji, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(end = 12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        action()
+    }
+}
+
+private fun hm(ms: Long): String {
+    val m = ms / 60_000L
+    return if (m >= 60) "${m / 60}h ${m % 60}m" else "${m}m"
 }
 
 @Composable

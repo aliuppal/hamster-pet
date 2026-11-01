@@ -11,6 +11,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.View
+import com.aliuppal.pockethamster.cosmetics.Look
 import com.aliuppal.pockethamster.pet.Mood
 import com.aliuppal.pockethamster.pet.PetRenderer
 
@@ -21,6 +22,7 @@ class FloatingPetView(context: Context) : View(context) {
     var eating = false
     var facingLeft = false
     var t = 0f
+    var look = Look()
 
     private val density = resources.displayMetrics.density
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -53,8 +55,9 @@ class FloatingPetView(context: Context) : View(context) {
         val cx = width / 2f
         val cy = height - petSize * 0.55f
         canvas.save()
-        if (facingLeft) canvas.scale(-1f, 1f, cx, cy)
-        PetRenderer.draw(canvas, cx, cy, petSize, mood, t, walking, eating)
+        // Signs have writing on them, so never mirror while holding one.
+        if (facingLeft && look.sign == null) canvas.scale(-1f, 1f, cx, cy)
+        PetRenderer.draw(canvas, cx, cy, petSize, mood, t, walking, eating, look)
         canvas.restore()
 
         val layout = bubble ?: return

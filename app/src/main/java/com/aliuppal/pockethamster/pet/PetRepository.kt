@@ -2,6 +2,7 @@ package com.aliuppal.pockethamster.pet
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.aliuppal.pockethamster.wellness.Wellness
 import com.aliuppal.pockethamster.widget.PetWidgetProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,6 +74,25 @@ object PetRepository {
     fun pet() = update { it.copy(happiness = it.happiness + 4f) }
     fun chatted() = update { it.copy(happiness = it.happiness + 2f) }
     fun rename(name: String) = update { it.copy(name = name.ifBlank { "Peanut" }) }
+    fun hydrated() = update { it.copy(happiness = it.happiness + 8f) }
+
+    /** Real-world steps: every 1,000 lifts happiness and energy a little. */
+    fun walked(thousands: Int) = update {
+        it.copy(happiness = it.happiness + 3f * thousands, energy = it.energy + 2f * thousands)
+    }
+
+    /** Sleep that the phone started (plugged in at night), so unplugging can undo it. */
+    fun autoSleep() {
+        prefs.edit().putBoolean("autoSlept", true).apply()
+        sleep()
+    }
+
+    fun autoSlept() = prefs.getBoolean("autoSlept", false)
+
+    fun autoWake() {
+        prefs.edit().putBoolean("autoSlept", false).apply()
+        if (state.value.sleeping) wake()
+    }
 
     @Synchronized
     private fun update(change: (PetState) -> PetState) {
@@ -84,8 +104,10 @@ object PetRepository {
     }
 
     private fun decay(s: PetState, now: Long): PetState {
-        val hours = ((now - s.lastUpdate).coerceAtLeast(0L)) / 3_600_000f
-        if (hours <= 0f) return s
+        val elapsed = ((now - s.lastUpdate).coerceAtLeast(0L)) / 3_600_000f
+        if (elapsed <= 0f) return s
+        // Healthy screen time and recent water slow the decay; sleep recovery isn't affected.
+        val hours = if (s.sleeping) elapsed else elapsed * Wellness.decayMultiplier(now)
         return if (s.sleeping) {
             val energy = s.energy + 20f * hours
             s.copy(
