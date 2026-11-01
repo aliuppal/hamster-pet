@@ -150,20 +150,16 @@ object Budget {
         "\\b(spent|paid|pay|bought|cost|costs|expense)\\b[^0-9]{0,12}?(\\d+(?:[.,]\\d{1,2})?)(?:\\s*(?:\\w{1,3}\\s+)?(?:on|for)\\s+(.+))?",
         RegexOption.IGNORE_CASE,
     )
-    private val ASK = Regex(
-        "how much (did|have) i (spend|spent)|my (spending|expenses)|total (spent|spending|expenses)",
-        RegexOption.IGNORE_CASE,
-    )
+    private val QUESTION = Regex("^\\W*(how|what|did|when|which|show|list|where|why)\\b|\\?\\s*$", RegexOption.IGNORE_CASE)
 
-    /** "spent 12.50 on lunch" → an expense, so the hamster can keep the books from chat. */
+    /** "spent 12.50 on lunch" → an expense, so the hamster can keep the books from chat. Questions never log. */
     fun fromChat(input: String): Expense? {
+        if (QUESTION.containsMatchIn(input.trim())) return null
         val m = SPENT.find(input) ?: return null
         val cents = parseAmount(m.groupValues[2]) ?: return null
         val note = m.groupValues[3].trim().trimEnd('.', '!', '?').ifBlank { input.trim() }.take(60)
         return Expense(amountCents = cents, category = ExpenseCategory.guess(input), note = note)
     }
-
-    fun isSpendingQuestion(input: String) = ASK.containsMatchIn(input)
 
     // ------------------------------------------------------------------ storage
 

@@ -2,6 +2,7 @@ package com.aliuppal.pockethamster.chat
 
 import com.aliuppal.pockethamster.AppSettings
 import com.aliuppal.pockethamster.budget.Budget
+import com.aliuppal.pockethamster.budget.BudgetAssistant
 import com.aliuppal.pockethamster.pet.Mood
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.pet.PetState
@@ -22,6 +23,35 @@ enum class Outcome { FED, TOO_FULL, PLAYED, TOO_TIRED, SLEPT, WOKE, PETTED, HYDR
 class BrainReply(val text: String, val usedAi: Boolean, val aiError: String?)
 
 object PetBrain {
+    private const val NOTED_PREFIX = "*scribbles in a tiny notebook*"
+    private const val SUMMARY_PREFIX = BudgetAssistant.PREFIX
+
+    fun isBudgetMessage(text: String) = Budget.fromChat(text) != null || BudgetAssistant.isBudgetQuestion(text)
+
+    /**
+     * The chat history that may be sent to OpenRouter: never expenses. Drops system notes, every
+     * budget message and the hamster's budget replies (matched by their fixed opening, and as the
+     * reply right after a budget message), so older chats saved before this rule are covered too.
+     */
+    fun aiSafeHistory(history: List<ChatMessage>): List<ChatMessage> {
+        val safe = ArrayList<ChatMessage>(history.size)
+        var afterBudget = false
+        for (m in history) {
+            if (m.system) continue
+            if (!m.fromPet) {
+                afterBudget = isBudgetMessage(m.text)
+                if (!afterBudget) safe += m
+                continue
+            }
+            val budgetReply = m.text.startsWith(NOTED_PREFIX) || m.text.startsWith(SUMMARY_PREFIX)
+            if (budgetReply || afterBudget) {
+                afterBudget = false
+                continue
+            }
+            safe += m
+        }
+        return safe
+    }
 
     fun perform(action: PetAction): Outcome = when (action) {
         PetAction.FEED -> if (PetRepository.feed()) Outcome.FED else Outcome.TOO_FULL
@@ -55,20 +85,12 @@ object PetBrain {
             PetRepository.chatted()
             val s = Budget.summary()
             return BrainReply(
-                "*scribbles in a tiny notebook* Noted ${Budget.format(e.amountCents)} for ${e.category.emoji} ${e.note}. " +
+                "$NOTED_PREFIX Noted ${Budget.format(e.amountCents)} for ${e.category.emoji} ${e.note}. " +
                     "That's ${Budget.format(s.week)} this week and ${Budget.format(s.month)} this month.",
                 usedAi = false, aiError = null,
             )
         }
-        if (Budget.isSpendingQuestion(input)) {
-            val s = Budget.summary()
-            val top = s.byCategoryMonth.entries.firstOrNull()
-            val topLine = top?.let { " Most of it went on ${it.key.emoji} ${it.key.label} (${Budget.format(it.value)})." } ?: ""
-            return BrainReply(
-                "*flips through notebook* This week: ${Budget.format(s.week)}. This month: ${Budget.format(s.month)}.$topLine",
-                usedAi = false, aiError = null,
-            )
-        }
+        BudgetAssistant.answer(input)?.let { return BrainReply(it, usedAi = false, aiError = null) }
         val outcome = detectAction(input)?.let { perform(it) }
         PetRepository.chatted()
         val state = PetRepository.state.value
@@ -128,7 +150,10 @@ object PetBrain {
                 "Hmm... *tilts head* I'm just a hamster, but I think... yes? Maybe? Seeds?",
                 "That's a big question for a small hamster! *thinks very hard*",
                 "*scratches ear* I don't know, but I know where I hid a peanut!",
-            )
+            ) + if (AppSettings.apiKey.isBlank()) {
+                " (Add a free OpenRouter key in ⚙️ Settings and I can answer all kinds of questions! " +
+                    "I can already answer about your expenses: try “show my expenses”.)"
+            } else ""
             else -> PetLines.idle(state.mood)
         }
     }
@@ -153,14 +178,14 @@ object PetBrain {
         if (models.isEmpty()) throw IOException("only :free models are allowed")
 
         val messages = JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt(state, outcome)))
-        history.filter { !it.system }.takeLast(12).forEach {
+        aiSafeHistory(history).takeLast(12).forEach {
             messages.put(JSONObject().put("role", if (it.fromPet) "assistant" else "user").put("content", it.text))
         }
         val body = JSONObject()
             .put("model", models.first())
             .put("models", JSONArray(models))
             .put("messages", messages)
-            .put("max_tokens", 160)
+            .put("max_tokens", 400)
             .put("temperature", 0.9)
             // Many free models are reasoning models; without this they can return empty text.
             .put("reasoning", JSONObject().put("effort", "low").put("exclude", true))
@@ -204,7 +229,9 @@ object PetBrain {
         }
         return """
             You are ${s.name}, a tiny, cute pet hamster who lives inside the user's phone and runs around their home screen.
-            Reply in 1-2 short sentences with simple, playful words. Sometimes add hamster actions in asterisks like *squeak* or *stuffs cheeks*.
+            For small talk, reply in 1-2 short sentences with simple, playful words. Sometimes add hamster actions in asterisks like *squeak* or *stuffs cheeks*.
+            When the user asks a real question (facts, advice, how-to, explanations, maths, writing help), answer it correctly and helpfully in up to 5 short sentences or a short list, still in your cute voice. If you don't know, say so; never make things up.
+            You cannot see the user's expenses. If they ask about their own spending, tell them to ask you "show my expenses" or check the Budget tab.
             Stay in character: never say you are an AI or a language model. Keep it kind and family friendly.
             Current feelings: mood ${s.mood.label.lowercase()}, fullness ${s.fullness.roundToInt()}/100, happiness ${s.happiness.roundToInt()}/100, energy ${s.energy.roundToInt()}/100${if (s.sleeping) ", you are asleep and talk sleepily" else ""}.
             $event

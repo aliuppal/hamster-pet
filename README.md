@@ -13,7 +13,7 @@ Open the link on your phone, tap the downloaded file and allow installing from t
 - **Pet tab:** an animated hamster (Peanut by default; rename it in Settings) with Food, Happiness and Energy stats that slowly drop over time. Use Feed 🌻, Play 🎡 and Sleep 🌙, or tap the hamster to pet it.
 - **Chat tab:** talk to your hamster. Chatting cheers it up, and words act too: "want a seed?" feeds it, "let's play" plays, "good night" puts it to sleep.
   - Works fully offline with a built-in personality.
-  - Optional AI replies: add an OpenRouter API key in Settings. Only free models (ids ending in `:free`) are allowed, with free fallbacks.
+  - Optional AI replies: add an OpenRouter API key in Settings and the hamster can answer any question (facts, advice, how-to). Only free models (ids ending in `:free`) are allowed, with free fallbacks. Budget messages are never sent to the AI.
 - **On the home screen:**
   - **Floating hamster.** After you allow *Display over other apps*, the hamster roams your whole screen on top of the home screen and other apps. Drag it anywhere and it stays where you drop it. Tap to pet it, double-tap to open the chat. A low-priority notification has a **Hide** button, and the hamster comes back after a reboot.
   - **Home screen widget.** Shows the hamster in its current outfit, its mood, stat bars, and Feed / Play / Chat buttons.
@@ -28,7 +28,7 @@ Open the link on your phone, tap the downloaded file and allow installing from t
   - **Focus mode.** A 25-minute session with glasses on earns +15 🌰.
 - **Reminder settings.** You can switch Health, Productivity and Pet care reminders on or off. Swipe a category's reminder away 3 times in a row and the hamster says "Okay, I'll let you be for a while!" and backs off for 4 hours.
 - **Closet.** Seven furs (Standard, Rare, Fantasy), plus hats, glasses, scarves, a cape, a backpack and props. Seasonal items (pumpkin hat in October, beanie and scarf in Dec–Feb, rainbow bandana in June) can only be bought in season. Tapping an item is a **live try-on** in the app, the floating hamster and the widget at the same time. Unlock items with acorns 🌰, and save **outfits** such as "Work Mode" and "Weekend".
-- **Budget tracker.** Log expenses by category, see **this week** and **this month** totals and a per-category breakdown, and set an optional monthly budget. Choose **PKR (Rs)** or **USD ($)** in Settings. You can also log by chat: "spent 12.50 on lunch". Ask "how much did I spend?" for a summary.
+- **Budget tracker.** Log expenses by category, see **this week** and **this month** totals and a per-category breakdown, and set an optional monthly budget. Choose **PKR (Rs)** or **USD ($)** in Settings. You can also log by chat ("spent 500 on lunch") and ask about your spending: "show my expenses", "how much on food this month?", "biggest expense last week", "how much budget is left?". These answers are worked out on the phone and are never sent to the AI.
 
 On first launch the app offers to put the hamster on your home screen straight away.
 

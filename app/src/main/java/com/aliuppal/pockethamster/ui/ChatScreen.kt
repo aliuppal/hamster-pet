@@ -101,12 +101,17 @@ fun ChatScreen(state: PetState, vm: ChatViewModel = viewModel()) {
             }
         }
 
-        if (messages.size < 2 && !typing) {
+        if (!typing) {
+            // Expense questions are answered on the phone from the Budget log, never by the AI.
+            val budgetChips = listOf("📒 Show my expenses", "💰 How much did I spend this month?", "🏆 Biggest expense this month", "🎯 How much budget is left?")
+            val chips = if (messages.size < 2) {
+                listOf("Hi ${state.name}!", "Want a sunflower seed?", "Let's play!", "Tell me a joke") + budgetChips
+            } else budgetChips
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(listOf("Hi ${state.name}!", "Want a sunflower seed?", "Let's play!", "Tell me a joke", "How are you?")) {
+                items(chips) {
                     AssistChip(onClick = { send(it) }, label = { Text(it) })
                 }
             }
