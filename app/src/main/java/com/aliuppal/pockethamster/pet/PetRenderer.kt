@@ -176,8 +176,8 @@ object PetRenderer {
                 }
             }
             if (mood == Mood.SAD) {
-                // worried brows
-                c.drawLine(ex - side * 0.06f * s, ey - 0.09f * s, ex + side * 0.04f * s, ey - 0.12f * s, stroke)
+                // worried brows: inner end raised
+                c.drawLine(ex - side * 0.06f * s, ey - 0.13f * s, ex + side * 0.05f * s, ey - 0.09f * s, stroke)
             }
         }
         if (mood == Mood.SAD) {
