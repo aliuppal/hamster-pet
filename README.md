@@ -2,6 +2,12 @@
 
 A cute virtual pet hamster for Android. It has a simple chat, and the hamster lives on your home screen.
 
+## Download
+
+**[⬇ PocketHamster.apk](https://github.com/aliuppal/hamster-pet/raw/main/apk/PocketHamster.apk)** (Android 8.0+, about 6.5 MB)
+
+Open the link on your phone, tap the downloaded file and allow installing from this source. If Play Protect warns about an unrecognised app, tap **More details → Install anyway**. After installing, open the app and tap **Put on home screen**, then allow **Display over other apps**.
+
 ## Features
 
 - **Pet tab:** an animated hamster (Peanut by default; rename it in Settings) with Food, Happiness and Energy stats that slowly drop over time. Use Feed 🌻, Play 🎡 and Sleep 🌙, or tap the hamster to pet it.
