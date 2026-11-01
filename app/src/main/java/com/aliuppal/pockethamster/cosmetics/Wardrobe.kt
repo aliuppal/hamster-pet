@@ -71,7 +71,10 @@ data class Look(
     val body: Item? = null,
     val prop: Item? = null,
     val sign: String? = null,
+    /** Buzzes with energy while charging during the day. */
     val shiver: Boolean = false,
+    /** Night-time drowsiness: drawn with sleepy eyes even when the mood is fine. */
+    val sleepy: Boolean = false,
 ) {
     operator fun get(slot: Slot): Item? = when (slot) {
         Slot.HEAD -> head

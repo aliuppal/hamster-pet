@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 
@@ -93,7 +94,10 @@ object CompanionEngine {
      * hydration kit > water reward > break sign > umbrella for the hands.
      */
     fun look(pet: PetState, wardrobe: Wardrobe.State, wellness: WellnessState, live: Live, now: Long = System.currentTimeMillis()): Look {
-        wardrobe.preview?.let { return it.copy(shiver = live.device.ringerQuiet) }
+        // Night makes it drowsy; daytime charging makes it buzz, and stops the moment it's unplugged.
+        val night = ReminderSettings.isNight(LocalTime.now().hour)
+        val buzzing = live.device.charging && !night
+        wardrobe.preview?.let { return it.copy(shiver = buzzing, sleepy = night) }
         var l = wardrobe.equipped
         l = when {
             pet.sleeping || pet.energy < 20f -> l.copy(face = Item.SLEEP_MASK)
@@ -111,7 +115,7 @@ object CompanionEngine {
             live.raining -> l.copy(prop = Item.UMBRELLA)
             else -> l
         }
-        return l.copy(shiver = live.device.ringerQuiet)
+        return l.copy(shiver = buzzing, sleepy = night)
     }
 
     fun currentLook() = look(PetRepository.state.value, Wardrobe.state.value, Wellness.state.value, _live.value)

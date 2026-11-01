@@ -19,7 +19,7 @@ Open the link on your phone, tap the downloaded file and allow installing from t
   - **Home screen widget.** Shows the hamster in its current outfit, its mood, stat bars, and Feed / Play / Chat buttons.
 - **Lives with you (context-aware):**
   - After 30+ minutes in social apps it holds up a **"Let's take a break!"** sign. This uses Usage access and needs your opt-in after a disclosure.
-  - It shivers when the phone is on silent or vibrate, wears sunglasses at full brightness, and goes to sleep (with a sleep mask) when you charge the phone at night.
+  - It buzzes with energy while charging during the day (and stops when you unplug), looks sleepy at night, wears sunglasses at full brightness, and goes to sleep (with a sleep mask) when you charge the phone at night.
   - It says "Good morning! ☀️" at 8 AM and "Time to wind down 🌙" at 10 PM, and jokes about a low battery at 15%. It carries an umbrella when it's raining near you (approximate location, Open-Meteo, opt-in).
 - **Wellness:**
   - **Hydration loop.** The hamster gets thirsty, puts on its backpack and water bottle, and asks you to tap it after a sip. Tap it, or tap "I drank water" in the notification, and you get a hop dance and +20 🌰, and it keeps the bottle for 10 minutes.
@@ -28,7 +28,7 @@ Open the link on your phone, tap the downloaded file and allow installing from t
   - **Focus mode.** A 25-minute session with glasses on earns +15 🌰.
 - **Reminder settings.** You can switch Health, Productivity and Pet care reminders on or off. Swipe a category's reminder away 3 times in a row and the hamster says "Okay, I'll let you be for a while!" and backs off for 4 hours.
 - **Closet.** Seven furs (Standard, Rare, Fantasy), plus hats, glasses, scarves, a cape, a backpack and props. Seasonal items (pumpkin hat in October, beanie and scarf in Dec–Feb, rainbow bandana in June) can only be bought in season. Tapping an item is a **live try-on** in the app, the floating hamster and the widget at the same time. Unlock items with acorns 🌰, and save **outfits** such as "Work Mode" and "Weekend".
-- **Budget tracker.** Log expenses by category, see **this week** and **this month** totals and a per-category breakdown, and set an optional monthly budget. You can also log by chat: "spent 12.50 on lunch". Ask "how much did I spend?" for a summary.
+- **Budget tracker.** Log expenses by category, see **this week** and **this month** totals and a per-category breakdown, and set an optional monthly budget. Choose **PKR (Rs)** or **USD ($)** in Settings. You can also log by chat: "spent 12.50 on lunch". Ask "how much did I spend?" for a summary.
 
 On first launch the app offers to put the hamster on your home screen straight away.
 

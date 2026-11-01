@@ -191,7 +191,7 @@ class PetOverlayService : LifecycleService() {
         t += dt
         val now = System.currentTimeMillis()
         val state = PetRepository.state.value
-        val lazy = state.mood == Mood.SLEEPING || state.mood == Mood.TIRED
+        val lazy = state.mood == Mood.SLEEPING || state.mood == Mood.TIRED || view.look.sleepy
 
         when (mode) {
             Mode.IDLE -> if (now > idleUntil && !lazy && now > celebrateUntil) {

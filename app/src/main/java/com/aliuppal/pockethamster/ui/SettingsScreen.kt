@@ -43,6 +43,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aliuppal.pockethamster.AppSettings
+import com.aliuppal.pockethamster.budget.Budget
+import com.aliuppal.pockethamster.budget.Currency
 import com.aliuppal.pockethamster.pet.PetRepository
 import com.aliuppal.pockethamster.pet.PetState
 import com.aliuppal.pockethamster.reminders.Category
@@ -86,6 +88,7 @@ private enum class Disclosure(val title: String, val body: String) {
 fun SettingsScreen(pet: PetState, perms: PermissionState, onDismiss: () -> Unit) {
     // Read so the reminder controls recompose whenever a setting changes.
     val version by ReminderSettings.version.collectAsStateWithLifecycle()
+    val budget by Budget.state.collectAsStateWithLifecycle()
     var name by remember { mutableStateOf(pet.name) }
     var apiKey by remember { mutableStateOf(AppSettings.apiKey) }
     var model by remember { mutableStateOf(AppSettings.model) }
@@ -146,6 +149,22 @@ fun SettingsScreen(pet: PetState, perms: PermissionState, onDismiss: () -> Unit)
                     )
                     Text("Stay under it and ${pet.name}'s stats drop 40% slower.", style = MaterialTheme.typography.bodySmall)
 
+                    Section("Budget")
+                    Text("Currency", style = MaterialTheme.typography.bodyMedium)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Currency.entries.forEach { c ->
+                            FilterChip(
+                                selected = budget.currency == c,
+                                onClick = { Budget.setCurrency(c) },
+                                label = { Text(c.label) },
+                            )
+                        }
+                    }
+                    Text(
+                        "Changes how amounts are shown, e.g. ${Budget.format(125_000)}. Saved amounts aren't converted.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
                     Section("Privacy & permissions")
                     Text(
                         "Everything below is optional and off until you allow it. Data stays on your phone unless noted.",
@@ -164,7 +183,7 @@ fun SettingsScreen(pet: PetState, perms: PermissionState, onDismiss: () -> Unit)
                         if (on) disclosure = Disclosure.WEATHER else perms.setWeather(false)
                     }
                     Text(
-                        "Always on: shivers on silent/vibrate, sunglasses at full brightness, sleeps when charging at night. These only read device settings.",
+                        "Always on: buzzes while charging in the day (stops when unplugged), sleepy eyes at night, sleeps when charging at night, sunglasses at full brightness. These only read device settings.",
                         style = MaterialTheme.typography.bodySmall,
                     )
 

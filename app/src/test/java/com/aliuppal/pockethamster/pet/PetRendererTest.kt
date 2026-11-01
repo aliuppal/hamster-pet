@@ -58,6 +58,8 @@ class PetRendererTest {
         render("scene_hydration") { pet(it, look = Look(body = Item.BACKPACK, prop = Item.WATER_BOTTLE)) }
         render("scene_break_sign") { pet(it, Mood.OK, Look(prop = Item.BREAK_SIGN, sign = "Let's take\na break!")) }
         render("scene_sleep_mask") { pet(it, Mood.SLEEPING, Look(face = Item.SLEEP_MASK)) }
+        render("scene_night_sleepy") { pet(it, Mood.HAPPY, Look(sleepy = true)) }
+        render("scene_charging_buzz") { pet(it, Mood.HAPPY, Look(shiver = true), t = 0.02f) }
         render("scene_work_mode") { pet(it, look = Look(face = Item.GLASSES, body = Item.TIE)) }
         render("scene_weekend") { pet(it, look = Look(fur = Fur.GALAXY_BLUE, face = Item.SUNGLASSES, body = Item.BACKPACK, head = Item.CROWN)) }
         render("scene_rain") { pet(it, Mood.OK, Look(fur = Fur.CALICO, head = Item.BEANIE, body = Item.SCARF, prop = Item.UMBRELLA)) }

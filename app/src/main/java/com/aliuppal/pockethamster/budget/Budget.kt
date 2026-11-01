@@ -6,7 +6,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.NumberFormat
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -33,6 +34,11 @@ enum class ExpenseCategory(val label: String, val emoji: String, private val key
     }
 }
 
+enum class Currency(val label: String, val symbol: String) {
+    PKR("Pakistani Rupee (Rs)", "Rs "),
+    USD("US Dollar ($)", "$"),
+}
+
 data class Expense(
     val id: Long = System.nanoTime(),
     val amountCents: Long,
@@ -51,7 +57,11 @@ data class BudgetSummary(
 
 /** A small on-device expense log with weekly and monthly totals. */
 object Budget {
-    data class State(val expenses: List<Expense> = emptyList(), val monthlyLimitCents: Long = 0L)
+    data class State(
+        val expenses: List<Expense> = emptyList(),
+        val monthlyLimitCents: Long = 0L,
+        val currency: Currency = Currency.PKR,
+    )
 
     private lateinit var prefs: SharedPreferences
     private val _state = MutableStateFlow(State())
@@ -59,7 +69,15 @@ object Budget {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("budget", Context.MODE_PRIVATE)
-        _state.value = State(load(), prefs.getLong("limit", 0L))
+        val currency = prefs.getString("currency", null)?.let { runCatching { Currency.valueOf(it) }.getOrNull() }
+            ?: if (Locale.getDefault().country == "US") Currency.USD else Currency.PKR
+        _state.value = State(load(), prefs.getLong("limit", 0L), currency)
+    }
+
+    /** Changes how amounts are shown; stored amounts are not converted. */
+    fun setCurrency(currency: Currency) {
+        _state.value = _state.value.copy(currency = currency)
+        prefs.edit().putString("currency", currency.name).apply()
     }
 
     @Synchronized
@@ -107,7 +125,13 @@ object Budget {
 
     // ------------------------------------------------------------------ formatting + parsing
 
-    fun format(cents: Long): String = NumberFormat.getCurrencyInstance().format(cents / 100.0)
+    /** "Rs 1,250" or "$12.50". Rupees drop the paisa when there are none. */
+    fun format(cents: Long): String {
+        val currency = _state.value.currency
+        val pattern = if (currency == Currency.PKR && cents % 100 == 0L) "#,##0" else "#,##0.00"
+        val sign = if (cents < 0) "-" else ""
+        return sign + currency.symbol + DecimalFormat(pattern, DecimalFormatSymbols(Locale.US)).format(kotlin.math.abs(cents) / 100.0)
+    }
 
     fun parseAmount(text: String): Long? =
         text.trim().replace(",", ".").toDoubleOrNull()?.takeIf { it > 0 && it < 1e9 }?.let { (it * 100).roundToLong() }

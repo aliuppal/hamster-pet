@@ -45,9 +45,10 @@ object PetRenderer {
     private val path = Path()
 
     fun draw(
-        c: Canvas, cx0: Float, cy: Float, size: Float, mood: Mood, t: Float,
+        c: Canvas, cx0: Float, cy: Float, size: Float, petMood: Mood, t: Float,
         walking: Boolean = false, eating: Boolean = false, look: Look = Look(),
     ) {
+        val mood = if (look.sleepy && petMood != Mood.SLEEPING) Mood.TIRED else petMood
         val s = size
         val lw = 0.026f * s
         stroke.strokeWidth = lw
